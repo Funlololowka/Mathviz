@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Визуализация формул</title>
+  <style>
+    :root {
+      --bg: #0f0f10;
+      --panel: rgba(255,255,255,0.06);
+      --panel-border: rgba(255,255,255,0.12);
+      --text: #f5f5f5;
+      --muted: rgba(255,255,255,0.58);
+      --grid: rgba(255,255,255,0.08);
+      --grid-strong: rgba(255,255,255,0.18);
+      --axis: rgba(255,255,255,0.55);
+      --shadow: 0 20px 60px rgba(0,0,0,0.45);
+      --radius: 24px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at top left, #1b1b1d 0%, #111214 42%, #090909 100%);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overflow: hidden;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 18px;
+      width: 100%;
+      height: 100%;
+      padding: 18px;
+    }
+
+    .graph-wrap,
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      box-shadow: var(--shadow);
+    }
+
+    .graph-wrap {
+      position: relative;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .panel {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .panel h2 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .panel p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .field label {
+      font-size: 13px;
+      color: rgba(255,255,255,0.8);
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      resize: vertical;
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.05);
+      color: white;
+      outline: none;
+      font-size: 15px;
+      line-height: 1.5;
+      transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+    }
+
+    textarea:focus {
+      border-color: rgba(255,255,255,0.35);
+      background: rgba(255,255,255,0.08);
+      transform: translateY(-1px);
+    }
+
+    .pretty-input {
+      min-height: 96px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.035);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow: auto;
+    }
+
+    .pretty-line {
+      min-height: 22px;
+      color: rgba(255,255,255,0.96);
+      font-size: 18px;
+      line-height: 1.2;
+      letter-spacing: 0.01em;
+    }
+
+    .pretty-placeholder {
+      color: rgba(255,255,255,0.34);
+      font-size: 14px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: white;
+    }
+
+    .range-box {
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .range-box .title {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .range-box .value {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    button {
+      flex: 1;
+      padding: 14px 16px;
+      border: none;
+      border-radius: 18px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.18s ease, opacity 0.18s ease, background 0.18s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    .primary {
+      background: white;
+      color: black;
+    }
+
+    .secondary {
+      background: rgba(255,255,255,0.08);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+
+    .hint, .status {
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .status.error {
+      color: #ffd7d7;
+      border-color: rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.06);
+    }
+
+    .examples {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip {
+      flex: 0 0 auto;
+      min-height: 42px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.05);
+      color: white;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.18s ease, transform 0.18s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      user-select: none;
+    }
+
+    .chip:hover {
+      background: rgba(255,255,255,0.09);
+      transform: translateY(-1px);
+    }
+
+    .math-inline {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      white-space: nowrap;
+      font-variant-numeric: lining-nums;
+    }
+
+    .math-inline sup {
+      font-size: 0.72em;
+      line-height: 0;
+      transform: translateY(-0.38em);
+      margin-left: 1px;
+    }
+
+    .math-frac {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      margin: 0 1px;
+      min-width: 1.55em;
+      transform: translateY(0.02em);
+    }
+
+    .math-frac .top,
+    .math-frac .bottom {
+      display: block;
+      padding: 0 0.18em;
+      font-size: 0.95em;
+    }
+
+    .math-frac .bar {
+      width: 100%;
+      height: 1px;
+      background: rgba(255,255,255,0.92);
+      margin: 0.14em 0 0.12em;
+      border-radius: 999px;
+    }
+
+    .math-sqrt {
+      display: inline-flex;
+      align-items: flex-start;
+      margin-right: 1px;
+    }
+
+    .math-sqrt .root {
+      font-size: 1.18em;
+      line-height: 1;
+      transform: translateY(0.02em);
+      margin-right: 1px;
+    }
+
+    .math-sqrt .content {
+      border-top: 1px solid rgba(255,255,255,0.92);
+      padding: 0.06em 0.08em 0 0.08em;
+      line-height: 1;
+    }
+
+    @media (max-width: 980px) {
+      html, body {
+        overflow: auto;
+      }
+
+      .app {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr auto;
+        min-height: 100vh;
+      }
+
+      .graph-wrap {
+        min-height: 58vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="graph-wrap">
+      <canvas id="canvas"></canvas>
+    </section>
+
+    <aside class="panel">
+      <div>
+        <h2>Ввод формулы</h2>
+        <p>Введите формулу вида <b>y = f(x)</b> или просто выражение. Например: <b>sin(x) * x / 3</b></p>
+      </div>
+
+      <div class="field">
+        <label for="formula">Формула</label>
+        <textarea id="formula">sin(x)
+0.15 * x^2
+cos(x) * 2</textarea>
+        <div class="pretty-input" id="prettyInput"></div>
+      </div>
+
+      <div class="row">
+        <div class="range-box">
+          <div class="title">Масштаб</div>
+          <div class="value" id="scaleValue">40</div>
+          <input id="scale" type="range" min="20" max="120" value="40" />
+        </div>
+        <div class="range-box">
+          <div class="title">Точность</div>
+          <div class="value" id="stepValue">2</div>
+          <input id="step" type="range" min="1" max="6" value="2" />
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="drawBtn">Построить</button>
+        <button class="secondary" id="resetBtn">Сброс</button>
+      </div>
+
+      <div class="examples">
+        <button class="chip" data-formula="x^2"></button>
+        <button class="chip" data-formula="sin(x)"></button>
+        <button class="chip" data-formula="x^3 / 20"></button>
+        <button class="chip" data-formula="sqrt(abs(x))"></button>
+        <button class="chip" data-formula="1 / x"></button>
+        <button class="chip" data-formula="tan(x / 3)"></button>
+      </div>
+
+      <div class="hint">
+        Можно вводить несколько формул, каждая с новой строки. Доступны функции: sin, cos, tan, abs, sqrt, log, exp.
+      </div>
+
+      <div class="status" id="status">Готово к построению.</div>
+    </aside>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    const formulaInput = document.getElementById('formula');
+    const prettyInput = document.getElementById('prettyInput');
+
+    const drawBtn = document.getElementById('drawBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const statusBox = document.getElementById('status');
+
+    const scaleInput = document.getElementById('scale');
+    const stepInput = document.getElementById('step');
+    const scaleValue = document.getElementById('scaleValue');
+    const stepValue = document.getElementById('stepValue');
+
+    const chips = document.querySelectorAll('.chip');
+
+    const colors = [
+      '#ffffff',
+      'rgba(255,255,255,0.78)',
+      'rgba(255,255,255,0.58)',
+      'rgba(255,255,255,0.9)'
+    ];
+
+    let width = 0;
+    let height = 0;
+    let scale = Number(scaleInput.value);
+    let precision = Number(stepInput.value);
+    let curves = [];
+    let animationStart = 0;
+    let animationFrame = null;
+    const duration = 1300;
+
+    function resizeCanvas() {
+      const ratio = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+
+      width = Math.floor(rect.width);
+      height = Math.floor(rect.height);
+
+      canvas.width = Math.floor(width * ratio);
+      canvas.height = Math.floor(height * ratio);
+
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      render(1);
+    }
+
+    function compileExpression(expr) {
+      let prepared = expr.trim();
+
+      prepared = prepared.replace(/^\s*y\s*=\s*/i, '');
+
+      prepared = prepared
+        .replace(/\^/g, '**')
+        .replace(/\bpi\b/gi, 'Math.PI')
+        .replace(/\be\b/g, 'Math.E')
+        .replace(/\bsin\b/g, 'Math.sin')
+        .replace(/\bcos\b/g, 'Math.cos')
+        .replace(/\btan\b/g, 'Math.tan')
+        .replace(/\babs\b/g, 'Math.abs')
+        .replace(/\bsqrt\b/g, 'Math.sqrt')
+        .replace(/\blog\b/g, 'Math.log')
+        .replace(/\bexp\b/g, 'Math.exp');
+
+      return new Function('x', `return ${prepared};`);
+    }
+
+    function buildCurves() {
+      const rawLines = formulaInput.value
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean);
+
+      if (!rawLines.length) {
+        throw new Error('Введите хотя бы одну формулу.');
+      }
+
+      const nextCurves = rawLines.map((line, index) => {
+        const fn = compileExpression(line);
+        const points = [];
+        const stepPx = precision;
+        const xMin = -width / 2;
+        const xMax = width / 2;
+
+        for (let px = xMin; px <= xMax; px += stepPx) {
+          const x = px / scale;
+          let y;
+
+          try {
+            y = fn(x);
+          } catch {
+            y = NaN;
+          }
+
+          if (!Number.isFinite(y)) {
+            points.push(null);
+            continue;
+          }
+
+          const screenX = width / 2 + px;
+          const screenY = height / 2 - y * scale;
+          points.push({ x: screenX, y: screenY });
+        }
+
+        return {
+          expr: line,
+          points,
+          color: colors[index % colors.length]
+        };
+      });
+
+      curves = nextCurves;
+    }
+
+    function drawGrid() {
+      const minor = scale;
+      const major = scale * 5;
+
+      ctx.clearRect(0, 0, width, height);
+
+      ctx.beginPath();
+      for (let x = width / 2 % minor; x <= width; x += minor) {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+      }
+      for (let y = height / 2 % minor; y <= height; y += minor) {
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+      }
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.beginPath();
+      for (let x = width / 2 % major; x <= width; x += major) {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+      }
+      for (let y = height / 2 % major; y <= height; y += major) {
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+      }
+      ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
+
+    function drawAxes() {
+      ctx.beginPath();
+      ctx.moveTo(0, height / 2);
+      ctx.lineTo(width, height / 2);
+      ctx.moveTo(width / 2, 0);
+      ctx.lineTo(width / 2, height);
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+    }
+
+    function drawCurve(curve, progress) {
+      const visibleCount = Math.floor(curve.points.length * progress);
+      ctx.beginPath();
+      let started = false;
+
+      for (let i = 0; i < visibleCount; i++) {
+        const point = curve.points[i];
+
+        if (!point || point.y < -height * 3 || point.y > height * 3) {
+          started = false;
+          continue;
+        }
+
+        if (!started) {
+          ctx.moveTo(point.x, point.y);
+          started = true;
+        } else {
+          ctx.lineTo(point.x, point.y);
+        }
+      }
+
+      ctx.strokeStyle = curve.color;
+      ctx.lineWidth = 2.2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.shadowColor = 'rgba(255,255,255,0.22)';
+      ctx.shadowBlur = 14;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    function render(progress = 1) {
+      drawGrid();
+      drawAxes();
+      curves.forEach(curve => drawCurve(curve, progress));
+    }
+
+    function animate(timestamp) {
+      if (!animationStart) animationStart = timestamp;
+
+      const elapsed = timestamp - animationStart;
+      const t = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+
+      render(eased);
+
+      if (t < 1) {
+        animationFrame = requestAnimationFrame(animate);
+      }
+    }
+
+    function setStatus(text, isError = false) {
+      statusBox.textContent = text;
+      statusBox.classList.toggle('error', isError);
+    }
+
+    function mathWrap(content) {
+      return `<span class="math-inline">${content}</span>`;
+    }
+
+    function frac(top, bottom) {
+      return `
+        <span class="math-frac">
+          <span class="top">${top}</span>
+          <span class="bar"></span>
+          <span class="bottom">${bottom}</span>
+        </span>
+      `;
+    }
+
+    function sqrt(content) {
+      return `
+        <span class="math-sqrt">
+          <span class="root">√</span>
+          <span class="content">${content}</span>
+        </span>
+      `;
+    }
+
+    function formatMathLabel(expr) {
+      const source = expr
+        .replace(/^\s*y\s*=\s*/i, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (!source) return '';
+
+      if (/^x\^2$/i.test(source)) {
+        return mathWrap(`x<sup>2</sup>`);
+      }
+
+      if (/^x\^3\s*\/\s*20$/i.test(source)) {
+        return mathWrap(`x<sup>3</sup>${frac('&nbsp;', '20')}`);
+      }
+
+      if (/^sqrt\(abs\(x\)\)$/i.test(source)) {
+        return mathWrap(`${sqrt('|x|')}`);
+      }
+
+      if (/^1\s*\/\s*x$/i.test(source)) {
+        return mathWrap(`${frac('1', 'x')}`);
+      }
+
+      if (/^sin\(x\)$/i.test(source)) {
+        return mathWrap(`sin(x)`);
+      }
+
+      if (/^cos\(x\)$/i.test(source)) {
+        return mathWrap(`cos(x)`);
+      }
+
+      if (/^tan\(x\s*\/\s*3\)$/i.test(source)) {
+        return mathWrap(`tan(${frac('x', '3')})`);
+      }
+
+      let pretty = source;
+
+      pretty = pretty.replace(/sqrt\(abs\(x\)\)/gi, sqrt('|x|'));
+      pretty = pretty.replace(/sqrt\((.*?)\)/gi, (_, inner) => sqrt(inner));
+      pretty = pretty.replace(/([a-zA-Z0-9\)])\^([\-]?\d+(\.\d+)?)/g, '$1<sup>$2</sup>');
+      pretty = pretty.replace(/\b1\s*\/\s*x\b/g, frac('1', 'x'));
+
+      return mathWrap(pretty);
+    }
+
+    function renderPrettyMath() {
+      chips.forEach(chip => {
+        chip.innerHTML = formatMathLabel(chip.dataset.formula || '');
+      });
+    }
+
+    function renderPrettyInput() {
+      const lines = formulaInput.value
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean);
+
+      if (!lines.length) {
+        prettyInput.innerHTML = '<div class="pretty-placeholder">Здесь будет красивый предпросмотр формул</div>';
+        return;
+      }
+
+      prettyInput.innerHTML = lines
+        .map(line => `<div class="pretty-line">${formatMathLabel(line)}</div>`)
+        .join('');
+    }
+
+    function plot() {
+      cancelAnimationFrame(animationFrame);
+      animationStart = 0;
+
+      scale = Number(scaleInput.value);
+      precision = Number(stepInput.value);
+
+      scaleValue.textContent = scale;
+      stepValue.textContent = precision;
+
+      renderPrettyInput();
+
+      try {
+        buildCurves();
+        setStatus(`Построено формул: ${curves.length}`);
+        animationFrame = requestAnimationFrame(animate);
+      } catch (error) {
+        curves = [];
+        render(1);
+        setStatus(error.message || 'Ошибка в формуле.', true);
+      }
+    }
+
+    drawBtn.addEventListener('click', plot);
+
+    resetBtn.addEventListener('click', () => {
+      formulaInput.value = 'sin(x)\n0.15 * x^2\ncos(x) * 2';
+      scaleInput.value = 40;
+      stepInput.value = 2;
+      renderPrettyInput();
+      plot();
+    });
+
+    scaleInput.addEventListener('input', () => {
+      scaleValue.textContent = scaleInput.value;
+      plot();
+    });
+
+    stepInput.addEventListener('input', () => {
+      stepValue.textContent = stepInput.value;
+      plot();
+    });
+
+    formulaInput.addEventListener('keydown', event => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        plot();
+      }
+    });
+
+    formulaInput.addEventListener('input', () => {
+      renderPrettyInput();
+    });
+
+    chips.forEach(chip => {
+      chip.addEventListener('click', () => {
+        formulaInput.value = chip.dataset.formula;
+        renderPrettyInput();
+        plot();
+      });
+    });
+
+    renderPrettyMath();
+    renderPrettyInput();
+
+    window.addEventListener('resize', resizeCanvas);
+
+    resizeCanvas();
+    plot();
+  </script>
+</body>
+</html>
