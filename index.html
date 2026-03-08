@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Formula Visualizer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap');
+
+  :root {
+    --paper: #f5f0e8;
+    --paper-dark: #ede5d4;
+    --paper-mid: #f0e9d9;
+    --ink: #2c2416;
+    --ink-soft: #5a4e3a;
+    --ink-faint: #8a7a62;
+    --accent: #b85c38;
+    --accent-soft: #d4826a;
+    --accent-light: #f2d5c8;
+    --blue-ink: #2d4a6e;
+    --blue-soft: #4a7aa8;
+    --grid-color: rgba(45, 74, 110, 0.12);
+    --shadow: rgba(44, 36, 22, 0.15);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Lora', serif;
+    background: var(--paper);
+    color: var(--ink);
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 20% 20%, rgba(184, 92, 56, 0.04) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 80%, rgba(45, 74, 110, 0.04) 0%, transparent 60%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ---- GRAPH AREA ---- */
+  .graph-area {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    z-index: 1;
+  }
+
+  .canvas-wrap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--paper-mid);
+    box-shadow:
+      inset 0 0 0 1px rgba(44, 36, 22, 0.08),
+      0 2px 20px var(--shadow);
+  }
+
+  .canvas-wrap::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(rgba(45, 74, 110, 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(45, 74, 110, 0.06) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  #graphCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+  }
+
+  .graph-hint {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: var(--ink-faint);
+    font-family: 'Crimson Pro', serif;
+    font-style: italic;
+    font-size: 1.3rem;
+    pointer-events: none;
+    z-index: 3;
+    transition: opacity 0.4s ease;
+  }
+
+  .graph-hint .big-symbol {
+    font-size: 3.5rem;
+    display: block;
+    margin-bottom: 8px;
+    opacity: 0.35;
+  }
+
+  /* ---- SIDEBAR ---- */
+  .sidebar {
+    width: 320px;
+    min-width: 300px;
+    background: var(--paper-dark);
+    border-left: 1px solid rgba(44, 36, 22, 0.12);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    z-index: 2;
+    box-shadow: -4px 0 24px rgba(44, 36, 22, 0.06);
+  }
+
+  /* Floating formulas background */
+  .formulas-bg {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .float-formula {
+    position: absolute;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    opacity: 0;
+    white-space: nowrap;
+    animation: floatUp var(--dur) var(--delay) infinite ease-in-out;
+    transform-origin: center;
+  }
+
+  @keyframes floatUp {
+    0%   { opacity: 0; transform: translateY(30px) rotate(var(--rot)); }
+    15%  { opacity: 0.22; }
+    50%  { opacity: 0.18; transform: translateY(-10px) rotate(calc(var(--rot) + 4deg)); }
+    85%  { opacity: 0.22; }
+    100% { opacity: 0; transform: translateY(-50px) rotate(calc(var(--rot) - 3deg)); }
+  }
+
+  /* Sidebar content */
+  .sidebar-inner {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 28px 22px;
+    gap: 20px;
+  }
+
+  .sidebar-title {
+    font-family: 'Lora', serif;
+    font-weight: 600;
+    font-size: 1.15rem;
+    color: var(--ink);
+    letter-spacing: 0.01em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .sidebar-title::before {
+    content: '∫';
+    font-size: 1.5rem;
+    color: var(--accent);
+    line-height: 1;
+  }
+
+  .section-label {
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.78rem;
+    font-weight: 300;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 8px;
+  }
+
+  /* Presets */
+  .presets-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+  }
+
+  .preset-btn {
+    background: rgba(255,255,255,0.5);
+    border: 1px solid rgba(44, 36, 22, 0.12);
+    border-radius: 6px;
+    padding: 9px 8px;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--ink-soft);
+    text-align: center;
+    transition: all 0.18s ease;
+    line-height: 1.3;
+  }
+
+  .preset-btn:hover {
+    background: rgba(184, 92, 56, 0.1);
+    border-color: var(--accent-soft);
+    color: var(--accent);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(184, 92, 56, 0.12);
+  }
+
+  .preset-btn.active {
+    background: var(--accent-light);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .preset-name {
+    font-family: 'Crimson Pro', serif;
+    font-style: italic;
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+    display: block;
+    margin-top: 2px;
+  }
+
+  /* Input */
+  .formula-input-wrap {
+    position: relative;
+  }
+
+  .formula-input {
+    width: 100%;
+    background: rgba(255,255,255,0.65);
+    border: 1.5px solid rgba(44, 36, 22, 0.15);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.88rem;
+    color: var(--ink);
+    outline: none;
+    transition: all 0.2s ease;
+    resize: none;
+    height: 70px;
+  }
+
+  .formula-input:focus {
+    border-color: var(--accent-soft);
+    background: rgba(255,255,255,0.85);
+    box-shadow: 0 0 0 3px rgba(184, 92, 56, 0.1);
+  }
+
+  .formula-input::placeholder {
+    color: var(--ink-faint);
+    font-style: italic;
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.85rem;
+  }
+
+  /* Range inputs */
+  .range-row {
+    display: flex;
+    gap: 10px;
+  }
+
+  .range-group {
+    flex: 1;
+  }
+
+  .range-group label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    display: block;
+    margin-bottom: 5px;
+  }
+
+  .range-group input[type="number"] {
+    width: 100%;
+    background: rgba(255,255,255,0.6);
+    border: 1.5px solid rgba(44, 36, 22, 0.12);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .range-group input[type="number"]:focus {
+    border-color: var(--accent-soft);
+  }
+
+  /* Color picker */
+  .color-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .color-swatch {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.15s;
+    position: relative;
+  }
+
+  .color-swatch:hover { transform: scale(1.15); }
+  .color-swatch.active { border-color: var(--ink); box-shadow: 0 0 0 2px var(--paper-dark); }
+
+  /* Visualize button */
+  .viz-btn {
+    width: 100%;
+    background: var(--accent);
+    color: #fdf8f2;
+    border: none;
+    border-radius: 8px;
+    padding: 13px;
+    font-family: 'Lora', serif;
+    font-weight: 600;
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .viz-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .viz-btn:hover {
+    background: #a04e2e;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(184, 92, 56, 0.35);
+  }
+
+  .viz-btn:active { transform: translateY(0); }
+
+  .viz-btn.loading {
+    pointer-events: none;
+    opacity: 0.8;
+  }
+
+  /* Error */
+  .error-msg {
+    background: rgba(184, 92, 56, 0.1);
+    border: 1px solid rgba(184, 92, 56, 0.3);
+    border-radius: 6px;
+    padding: 9px 12px;
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.85rem;
+    color: var(--accent);
+    display: none;
+  }
+
+  .error-msg.show { display: block; }
+
+  /* Formula display */
+  .current-formula-display {
+    background: rgba(255,255,255,0.4);
+    border-radius: 6px;
+    padding: 8px 12px;
+    border: 1px dashed rgba(44, 36, 22, 0.15);
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+  }
+
+  .current-formula-display span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--blue-soft);
+    word-break: break-all;
+  }
+
+  /* Divider */
+  .divider {
+    height: 1px;
+    background: rgba(44, 36, 22, 0.1);
+    margin: 0 -22px;
+  }
+
+  /* Coordinate display */
+  .coords-display {
+    position: absolute;
+    top: 14px;
+    left: 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--ink-faint);
+    background: rgba(245, 240, 232, 0.8);
+    padding: 4px 8px;
+    border-radius: 4px;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.2s;
+    backdrop-filter: blur(4px);
+  }
+
+  /* Points info bar */
+  .points-bar {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    justify-content: center;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    pointer-events: none;
+    max-width: calc(100% - 160px);
+  }
+  .points-bar.visible { opacity: 1; }
+  .pt-chip {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(245, 240, 232, 0.93);
+    border: 1px solid rgba(44, 36, 22, 0.09);
+    border-radius: 20px;
+    padding: 3px 9px 3px 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.64rem;
+    color: var(--ink-soft);
+    backdrop-filter: blur(6px);
+    box-shadow: 0 1px 5px rgba(44,36,22,0.07);
+    white-space: nowrap;
+  }
+  .pt-chip-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .pt-chip-label {
+    font-family: 'Crimson Pro', serif;
+    font-style: italic;
+    font-size: 0.7rem;
+    color: var(--ink-faint);
+    margin-right: 1px;
+  }
+
+  /* Responsive */
+  @media (max-width: 700px) {
+    body { flex-direction: column-reverse; }
+    .sidebar { width: 100%; min-width: unset; height: 55vh; border-left: none; border-top: 1px solid rgba(44,36,22,0.12); }
+    .graph-area { height: 45vh; padding: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- GRAPH AREA -->
+<div class="graph-area">
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="graphCanvas"></canvas>
+    <div class="graph-hint" id="graphHint">
+      <span class="big-symbol">∿</span>
+      Введи формулу и нажми<br>«Визуализировать»
+    </div>
+    <div class="coords-display" id="coordsDisplay">x: 0.00 | y: 0.00</div>
+    <div class="points-bar" id="pointsBar"></div>
+  </div>
+</div>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="formulas-bg" id="formulasBg"></div>
+  <div class="sidebar-inner">
+
+    <div class="sidebar-title">Formula Visualizer</div>
+
+    <div>
+      <div class="section-label">Пресеты</div>
+      <div class="presets-grid" id="presetsGrid"></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div>
+      <div class="section-label">Формула (в переменной x)</div>
+      <div class="formula-input-wrap">
+        <textarea class="formula-input" id="formulaInput" placeholder="например: sin(x) * cos(x/2)"></textarea>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Диапазон x</div>
+      <div class="range-row">
+        <div class="range-group">
+          <label>от</label>
+          <input type="number" id="xMin" value="-10" step="1">
+        </div>
+        <div class="range-group">
+          <label>до</label>
+          <input type="number" id="xMax" value="10" step="1">
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Цвет линии</div>
+      <div class="color-row" id="colorRow"></div>
+    </div>
+
+    <div class="error-msg" id="errorMsg"></div>
+
+    <button class="viz-btn" id="vizBtn">Визуализировать</button>
+
+    <div>
+      <div class="section-label">Текущая формула</div>
+      <div class="current-formula-display">
+        <span id="currentFormulaLabel">—</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ---- PRESETS ----
+const PRESETS = [
+  { label: 'sin(x)', name: 'Синус', xMin: -6.28, xMax: 6.28 },
+  { label: 'cos(x)', name: 'Косинус', xMin: -6.28, xMax: 6.28 },
+  { label: 'tan(x)', name: 'Тангенс', xMin: -6.28, xMax: 6.28 },
+  { label: 'x^2', name: 'Парабола', xMin: -8, xMax: 8 },
+  { label: 'x^3 - 3*x', name: 'Кубическая', xMin: -3, xMax: 3 },
+  { label: 'sin(x)/x', name: 'Sinc', xMin: -20, xMax: 20 },
+  { label: 'e^(-x^2)', name: 'Гаусс', xMin: -4, xMax: 4 },
+  { label: 'log(abs(x))', name: 'Лог', xMin: -8, xMax: 8 },
+  { label: 'sin(x^2)', name: 'Чирп', xMin: -6, xMax: 6 },
+  { label: 'abs(sin(x))', name: 'abs(sin)', xMin: -6.28, xMax: 6.28 },
+];
+
+const COLORS = [
+  { hex: '#b85c38', label: 'Терракота' },
+  { hex: '#2d4a6e', label: 'Синий' },
+  { hex: '#5a8a5e', label: 'Зелёный' },
+  { hex: '#7a5a8a', label: 'Фиолетовый' },
+  { hex: '#8a6a3a', label: 'Золотой' },
+  { hex: '#2a7a7a', label: 'Бирюза' },
+];
+
+let selectedColor = COLORS[0].hex;
+let activePresetIdx = -1;
+let animFrame = null;
+let currentAnimProgress = 0;
+let currentPoints = [];
+let isAnimating = false;
+
+// ---- BUILD PRESETS ----
+const presetsGrid = document.getElementById('presetsGrid');
+PRESETS.forEach((p, i) => {
+  const btn = document.createElement('button');
+  btn.className = 'preset-btn';
+  btn.innerHTML = `<code>${p.label}</code><span class="preset-name">${p.name}</span>`;
+  btn.onclick = () => {
+    activePresetIdx = i;
+    document.querySelectorAll('.preset-btn').forEach((b, j) => b.classList.toggle('active', j === i));
+    document.getElementById('formulaInput').value = p.label;
+    document.getElementById('xMin').value = p.xMin;
+    document.getElementById('xMax').value = p.xMax;
+    visualize();
+  };
+  presetsGrid.appendChild(btn);
+});
+
+// ---- BUILD COLORS ----
+const colorRow = document.getElementById('colorRow');
+COLORS.forEach((c, i) => {
+  const sw = document.createElement('div');
+  sw.className = 'color-swatch' + (i === 0 ? ' active' : '');
+  sw.style.background = c.hex;
+  sw.title = c.label;
+  sw.onclick = () => {
+    selectedColor = c.hex;
+    document.querySelectorAll('.color-swatch').forEach((s, j) => s.classList.toggle('active', j === i));
+    if (currentPoints.length) drawGraph(currentPoints, 1);
+  };
+  colorRow.appendChild(sw);
+});
+
+// ---- FLOATING FORMULAS ----
+const BG_FORMULAS = [
+  '∫f(x)dx', 'lim x→∞', 'Σ aₙ', 'd/dx', '∂²u/∂x²',
+  'e^{iπ}+1=0', '√(a²+b²)', 'sin²+cos²=1', 'f\'(x)',
+  '∇²φ=0', 'x = (-b±√D)/2a', 'dy/dx', '∫₀^∞', 'Δx→0',
+  'F = ma', 'E = mc²', 'eiφ', 'log_a(b)', '∏ nₖ',
+  'tanh(x)', 'arcsin', 'det(A)', 'λ₁,λ₂', '‖v‖',
+];
+
+const bgEl = document.getElementById('formulasBg');
+BG_FORMULAS.forEach((f, i) => {
+  const el = document.createElement('div');
+  el.className = 'float-formula';
+  el.textContent = f;
+  const left = 5 + Math.random() * 80;
+  const top = 5 + Math.random() * 85;
+  const dur = 6 + Math.random() * 8;
+  const delay = Math.random() * -12;
+  const rot = -15 + Math.random() * 30;
+  el.style.cssText = `left:${left}%;top:${top}%;--dur:${dur}s;--delay:${delay}s;--rot:${rot}deg`;
+  bgEl.appendChild(el);
+});
+
+// ---- CANVAS SETUP ----
+const canvas = document.getElementById('graphCanvas');
+const ctx = canvas.getContext('2d');
+const wrap = document.getElementById('canvasWrap');
+
+function resizeCanvas() {
+  canvas.width = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+  if (currentPoints.length) drawGraph(currentPoints, 1);
+}
+
+const resizeObserver = new ResizeObserver(resizeCanvas);
+resizeObserver.observe(wrap);
+resizeCanvas();
+
+// ---- GRAPH DRAWING ----
+function getPadding() {
+  const w = canvas.width, h = canvas.height;
+  return { top: 40, right: 40, bottom: 50, left: 60 };
+}
+
+function drawGraph(points, progress) {
+  const W = canvas.width, H = canvas.height;
+  const pad = getPadding();
+  const gW = W - pad.left - pad.right;
+  const gH = H - pad.top - pad.bottom;
+
+  ctx.clearRect(0, 0, W, H);
+
+  const validPts = points.filter(p => isFinite(p.y) && !isNaN(p.y));
+  if (!validPts.length) return;
+
+  const yValues = validPts.map(p => p.y);
+  const yMin = Math.min(...yValues);
+  const yMax = Math.max(...yValues);
+  const yRange = yMax - yMin || 1;
+  const yPad = yRange * 0.1;
+  const yLow = yMin - yPad, yHigh = yMax + yPad;
+
+  const xMin = points[0].x, xMax = points[points.length - 1].x;
+  const xRange = xMax - xMin;
+
+  function toCanvasX(x) { return pad.left + ((x - xMin) / xRange) * gW; }
+  function toCanvasY(y) { return pad.top + gH - ((y - yLow) / (yHigh - yLow)) * gH; }
+
+  // Grid
+  ctx.strokeStyle = 'rgba(45, 74, 110, 0.1)';
+  ctx.lineWidth = 1;
+  const xTicks = 8, yTicks = 6;
+
+  for (let i = 0; i <= xTicks; i++) {
+    const x = xMin + (xRange / xTicks) * i;
+    const cx = toCanvasX(x);
+    ctx.beginPath();
+    ctx.moveTo(cx, pad.top);
+    ctx.lineTo(cx, pad.top + gH);
+    ctx.stroke();
+  }
+
+  for (let i = 0; i <= yTicks; i++) {
+    const y = yLow + ((yHigh - yLow) / yTicks) * i;
+    const cy = toCanvasY(y);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, cy);
+    ctx.lineTo(pad.left + gW, cy);
+    ctx.stroke();
+  }
+
+  // Axes
+  const zeroX = toCanvasX(0);
+  const zeroY = toCanvasY(0);
+
+  if (zeroX >= pad.left && zeroX <= pad.left + gW) {
+    ctx.strokeStyle = 'rgba(44, 36, 22, 0.25)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(zeroX, pad.top);
+    ctx.lineTo(zeroX, pad.top + gH);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  if (zeroY >= pad.top && zeroY <= pad.top + gH) {
+    ctx.strokeStyle = 'rgba(44, 36, 22, 0.25)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, zeroY);
+    ctx.lineTo(pad.left + gW, zeroY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Labels
+  ctx.fillStyle = 'rgba(90, 78, 58, 0.65)';
+  ctx.font = '11px JetBrains Mono, monospace';
+  ctx.textAlign = 'center';
+  for (let i = 0; i <= xTicks; i += 2) {
+    const x = xMin + (xRange / xTicks) * i;
+    const cx = toCanvasX(x);
+    ctx.fillText(x.toFixed(1), cx, pad.top + gH + 20);
+  }
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= yTicks; i += 2) {
+    const y = yLow + ((yHigh - yLow) / yTicks) * i;
+    const cy = toCanvasY(y);
+    ctx.fillText(y.toFixed(2), pad.left - 8, cy + 4);
+  }
+
+  // Axis labels
+  ctx.fillStyle = 'rgba(44, 36, 22, 0.4)';
+  ctx.font = 'italic 13px Crimson Pro, serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('x', pad.left + gW + 18, pad.top + gH + 4);
+  ctx.fillText('y', pad.left - 18, pad.top - 10);
+
+  // Gradient fill
+  const totalPts = Math.floor(points.length * progress);
+  const visiblePts = points.slice(0, Math.max(totalPts, 2));
+
+  const gradient = ctx.createLinearGradient(0, pad.top, 0, pad.top + gH);
+  const baseColor = hexToRgb(selectedColor);
+  gradient.addColorStop(0, `rgba(${baseColor}, 0.18)`);
+  gradient.addColorStop(1, `rgba(${baseColor}, 0.02)`);
+
+  // Fill under curve
+  let started = false;
+  ctx.beginPath();
+  for (let i = 0; i < visiblePts.length; i++) {
+    const p = visiblePts[i];
+    if (!isFinite(p.y) || isNaN(p.y)) { started = false; continue; }
+    const cx = toCanvasX(p.x), cy = toCanvasY(p.y);
+    if (!started) {
+      ctx.moveTo(cx, toCanvasY(Math.max(yLow, Math.min(yHigh, 0))));
+      ctx.lineTo(cx, cy);
+      started = true;
+    } else {
+      ctx.lineTo(cx, cy);
+    }
+  }
+  if (started) {
+    const lastP = visiblePts[visiblePts.length - 1];
+    ctx.lineTo(toCanvasX(lastP.x), toCanvasY(Math.max(yLow, Math.min(yHigh, 0))));
+  }
+  ctx.closePath();
+  ctx.fillStyle = gradient;
+  ctx.fill();
+
+  // Main curve
+  ctx.strokeStyle = selectedColor;
+  ctx.lineWidth = 2.5;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  let inPath = false;
+  ctx.beginPath();
+  for (let i = 0; i < visiblePts.length; i++) {
+    const p = visiblePts[i];
+    if (!isFinite(p.y) || isNaN(p.y) || Math.abs(p.y) > (yHigh - yLow) * 10) {
+      inPath = false;
+      continue;
+    }
+    const cx = toCanvasX(p.x);
+    const cy = toCanvasY(Math.max(yLow - yPad * 5, Math.min(yHigh + yPad * 5, p.y)));
+    if (!inPath) { ctx.moveTo(cx, cy); inPath = true; }
+    else ctx.lineTo(cx, cy);
+  }
+  ctx.stroke();
+
+  // Glow effect
+  ctx.strokeStyle = `rgba(${baseColor}, 0.18)`;
+  ctx.lineWidth = 7;
+  ctx.filter = 'blur(3px)';
+  inPath = false;
+  ctx.beginPath();
+  for (let i = 0; i < visiblePts.length; i++) {
+    const p = visiblePts[i];
+    if (!isFinite(p.y) || isNaN(p.y) || Math.abs(p.y) > (yHigh - yLow) * 10) { inPath = false; continue; }
+    const cx = toCanvasX(p.x);
+    const cy = toCanvasY(Math.max(yLow - yPad * 5, Math.min(yHigh + yPad * 5, p.y)));
+    if (!inPath) { ctx.moveTo(cx, cy); inPath = true; }
+    else ctx.lineTo(cx, cy);
+  }
+  ctx.stroke();
+  ctx.filter = 'none';
+
+  // Border
+  ctx.strokeStyle = 'rgba(44, 36, 22, 0.06)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(pad.left, pad.top, gW, gH);
+
+  // ---- SPECIAL POINTS (only when animation is complete) ----
+  if (progress < 1) return;
+
+  function drawDot(cx, cy, color, radius, label, labelPos) {
+    // outer glow ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${hexToRgb(color)}, 0.2)`;
+    ctx.fill();
+    // white border
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#f5f0e8';
+    ctx.fill();
+    // dot fill
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+
+    if (!label) return;
+    ctx.save();
+    ctx.font = 'bold 10px JetBrains Mono, monospace';
+    const lx = labelPos === 'left'  ? cx - 12 :
+                labelPos === 'right' ? cx + 12 : cx;
+    const ly = labelPos === 'above' ? cy - 13  :
+                labelPos === 'below' ? cy + 17  : cy - 13;
+    ctx.textAlign = labelPos === 'left'  ? 'right' :
+                    labelPos === 'right' ? 'left'  : 'center';
+    // background pill
+    const tw = ctx.measureText(label).width;
+    const px = ctx.textAlign === 'right' ? lx - tw : ctx.textAlign === 'left' ? lx : lx - tw / 2;
+    ctx.fillStyle = 'rgba(245,240,232,0.88)';
+    ctx.beginPath();
+    ctx.roundRect(px - 3, ly - 11, tw + 6, 14, 3);
+    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.fillText(label, lx, ly);
+    ctx.restore();
+  }
+
+  // START point - first valid
+  const startP = points.find(p => isFinite(p.y) && !isNaN(p.y));
+  if (startP) {
+    const sx = toCanvasX(startP.x), sy = toCanvasY(startP.y);
+    if (sy >= pad.top && sy <= pad.top + gH) {
+      drawDot(sx, sy, '#2d4a6e', 5, `(${startP.x.toFixed(2)}, ${startP.y.toFixed(2)})`, 'right');
+    }
+  }
+
+  // END point - last valid
+  const endP = [...points].reverse().find(p => isFinite(p.y) && !isNaN(p.y));
+  if (endP && endP !== startP) {
+    const ex = toCanvasX(endP.x), ey = toCanvasY(endP.y);
+    if (ey >= pad.top && ey <= pad.top + gH) {
+      drawDot(ex, ey, '#2d4a6e', 5, `(${endP.x.toFixed(2)}, ${endP.y.toFixed(2)})`, 'left');
+    }
+  }
+
+  // X-AXIS intersections (sign changes -> y=0 crossings)
+  const xIntersections = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i], p1 = points[i + 1];
+    if (!isFinite(p0.y) || !isFinite(p1.y)) continue;
+    if (Math.sign(p0.y) !== Math.sign(p1.y) && Math.abs(p0.y - p1.y) < (yHigh - yLow) * 2) {
+      const t = Math.abs(p0.y) / (Math.abs(p0.y) + Math.abs(p1.y));
+      const ix = p0.x + t * (p1.x - p0.x);
+      xIntersections.push({ x: ix });
+    }
+  }
+  // deduplicate very close roots
+  const dedupX = xIntersections.filter((pt, i) =>
+    i === 0 || Math.abs(pt.x - xIntersections[i - 1].x) > xRange * 0.01
+  );
+  dedupX.forEach(pt => {
+    const cx2 = toCanvasX(pt.x), cy2 = toCanvasY(0);
+    if (cx2 < pad.left || cx2 > pad.left + gW) return;
+    if (cy2 < pad.top || cy2 > pad.top + gH) return;
+    drawDot(cx2, cy2, '#5a8a5e', 4, `x=${pt.x.toFixed(2)}`, 'below');
+  });
+
+  // Y-AXIS intersection (curve at x=0)
+  const yAxisIdx = points.findIndex((p, i) =>
+    i > 0 && isFinite(p.y) && isFinite(points[i-1].y) &&
+    points[i-1].x <= 0 && p.x >= 0
+  );
+  if (yAxisIdx > 0) {
+    const prev = points[yAxisIdx - 1], curr = points[yAxisIdx];
+    const t = Math.abs(prev.x) / (Math.abs(prev.x) + Math.abs(curr.x)) || 0;
+    const iy = prev.y + t * (curr.y - prev.y);
+    if (isFinite(iy)) {
+      const cx2 = toCanvasX(0), cy2 = toCanvasY(iy);
+      if (cx2 >= pad.left && cx2 <= pad.left + gW && cy2 >= pad.top && cy2 <= pad.top + gH) {
+        drawDot(cx2, cy2, '#b85c38', 5, `y=${iy.toFixed(2)}`, 'right');
+      }
+    }
+  }
+
+  // ---- LOCAL MAXIMA & MINIMA ----
+  // smooth window to avoid noise
+  const W2 = 6;
+  const extrema = [];
+  for (let i = W2; i < points.length - W2; i++) {
+    const p = points[i];
+    if (!isFinite(p.y) || isNaN(p.y)) continue;
+    let isMax = true, isMin = true;
+    for (let j = i - W2; j <= i + W2; j++) {
+      if (j === i) continue;
+      if (!isFinite(points[j].y)) { isMax = false; isMin = false; break; }
+      if (points[j].y >= p.y) isMax = false;
+      if (points[j].y <= p.y) isMin = false;
+    }
+    if (isMax || isMin) extrema.push({ ...p, kind: isMax ? 'max' : 'min' });
+  }
+
+  // deduplicate close extrema (keep strongest in neighbourhood)
+  const minDist = xRange * 0.04;
+  const dedupExtrema = [];
+  for (const pt of extrema) {
+    const last = dedupExtrema[dedupExtrema.length - 1];
+    if (last && Math.abs(pt.x - last.x) < minDist) {
+      // keep the more extreme one
+      if ((pt.kind === 'max' && pt.y > last.y) || (pt.kind === 'min' && pt.y < last.y)) {
+        dedupExtrema[dedupExtrema.length - 1] = pt;
+      }
+    } else {
+      dedupExtrema.push(pt);
+    }
+  }
+
+  // draw extrema — cap at 12 total to avoid clutter
+  const maxShow = 12;
+  const shown = dedupExtrema.slice(0, maxShow);
+  shown.forEach(pt => {
+    const cx2 = toCanvasX(pt.x), cy2 = toCanvasY(pt.y);
+    if (cx2 < pad.left || cx2 > pad.left + gW) return;
+    if (cy2 < pad.top  || cy2 > pad.top  + gH) return;
+    const color  = pt.kind === 'max' ? '#7a5a8a' : '#2a7a7a';
+    const symbol = pt.kind === 'max' ? '▲' : '▼';
+    const lpos   = pt.kind === 'max' ? 'above' : 'below';
+    drawDot(cx2, cy2, color, 4, `${symbol} ${pt.y.toFixed(2)}`, lpos);
+  });
+}
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `${r}, ${g}, ${b}`;
+}
+
+// ---- MOUSE COORDS ----
+const coordsDisplay = document.getElementById('coordsDisplay');
+canvas.addEventListener('mousemove', (e) => {
+  if (!currentPoints.length) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const pad = getPadding();
+  const gW = canvas.width - pad.left - pad.right;
+  const gH = canvas.height - pad.top - pad.bottom;
+
+  const xMin = currentPoints[0].x;
+  const xMax = currentPoints[currentPoints.length - 1].x;
+  const validPts = currentPoints.filter(p => isFinite(p.y));
+  if (!validPts.length) return;
+
+  const yMin = Math.min(...validPts.map(p => p.y));
+  const yMax = Math.max(...validPts.map(p => p.y));
+  const yRange = yMax - yMin || 1;
+  const yPad = yRange * 0.1;
+  const yLow = yMin - yPad, yHigh = yMax + yPad;
+
+  const x = xMin + ((mx - pad.left) / gW) * (xMax - xMin);
+  const y = yHigh - ((my - pad.top) / gH) * (yHigh - yLow);
+
+  coordsDisplay.style.opacity = '1';
+  coordsDisplay.textContent = `x: ${x.toFixed(3)} | y: ${y.toFixed(3)}`;
+});
+
+canvas.addEventListener('mouseleave', () => {
+  coordsDisplay.style.opacity = '0';
+});
+
+// ---- POINTS BAR ----
+function updatePointsBar(points) {
+  const bar = document.getElementById('pointsBar');
+  bar.innerHTML = '';
+  bar.classList.remove('visible');
+
+  const validPts = points.filter(p => isFinite(p.y) && !isNaN(p.y));
+  if (!validPts.length) return;
+
+  const xMin = points[0].x, xMax = points[points.length - 1].x;
+  const xRange = xMax - xMin;
+
+  const chips = [];
+
+  // START
+  const startP = validPts[0];
+  chips.push({ label: 'Начало', color: '#2d4a6e', x: startP.x, y: startP.y });
+
+  // END
+  const endP = validPts[validPts.length - 1];
+  if (endP !== startP) chips.push({ label: 'Конец', color: '#2d4a6e', x: endP.x, y: endP.y });
+
+  // GLOBAL MAX
+  const maxP = validPts.reduce((a, b) => b.y > a.y ? b : a);
+  chips.push({ label: '▲ макс', color: '#7a5a8a', x: maxP.x, y: maxP.y });
+
+  // GLOBAL MIN
+  const minP = validPts.reduce((a, b) => b.y < a.y ? b : a);
+  chips.push({ label: '▼ мин', color: '#2a7a7a', x: minP.x, y: minP.y });
+
+  // X-AXIS crossings
+  const crossings = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i], p1 = points[i + 1];
+    if (!isFinite(p0.y) || !isFinite(p1.y)) continue;
+    if (Math.sign(p0.y) !== Math.sign(p1.y)) {
+      const t = Math.abs(p0.y) / (Math.abs(p0.y) + Math.abs(p1.y));
+      crossings.push(p0.x + t * (p1.x - p0.x));
+    }
+  }
+  const dedupC = crossings.filter((x, i) => i === 0 || Math.abs(x - crossings[i-1]) > xRange * 0.01);
+  dedupC.slice(0, 5).forEach(x => {
+    chips.push({ label: 'x=0', color: '#5a8a5e', x, y: 0 });
+  });
+
+  // Y-AXIS crossing
+  const yIdx = points.findIndex((p, i) => i > 0 && isFinite(p.y) && isFinite(points[i-1].y) && points[i-1].x <= 0 && p.x >= 0);
+  if (yIdx > 0) {
+    const prev = points[yIdx - 1], curr = points[yIdx];
+    const t = Math.abs(prev.x) / (Math.abs(prev.x) + Math.abs(curr.x)) || 0;
+    const iy = prev.y + t * (curr.y - prev.y);
+    if (isFinite(iy)) chips.push({ label: 'y(0)', color: '#b85c38', x: 0, y: iy });
+  }
+
+  chips.forEach(c => {
+    const chip = document.createElement('div');
+    chip.className = 'pt-chip';
+    chip.innerHTML = `
+      <span class="pt-chip-dot" style="background:${c.color}"></span>
+      <span class="pt-chip-label">${c.label}</span>
+      (${c.x.toFixed(2)}, ${c.y.toFixed(2)})
+    `;
+    bar.appendChild(chip);
+  });
+
+  requestAnimationFrame(() => bar.classList.add('visible'));
+}
+
+// ---- VISUALIZE ----
+function visualize() {
+  const formula = document.getElementById('formulaInput').value.trim();
+  const xMin = parseFloat(document.getElementById('xMin').value);
+  const xMax = parseFloat(document.getElementById('xMax').value);
+  const errorMsg = document.getElementById('errorMsg');
+  const hint = document.getElementById('graphHint');
+
+  if (!formula) {
+    errorMsg.textContent = 'Введи формулу 📝';
+    errorMsg.classList.add('show');
+    return;
+  }
+  if (isNaN(xMin) || isNaN(xMax) || xMin >= xMax) {
+    errorMsg.textContent = 'Проверь диапазон x';
+    errorMsg.classList.add('show');
+    return;
+  }
+
+  errorMsg.classList.remove('show');
+  // clear points bar
+  const barEl = document.getElementById('pointsBar');
+  barEl.classList.remove('visible');
+  barEl.innerHTML = '';
+
+  let compiled;
+  try {
+    compiled = math.compile(formula);
+    compiled.evaluate({ x: 0 });
+  } catch (e) {
+    errorMsg.textContent = `Ошибка в формуле: ${e.message}`;
+    errorMsg.classList.add('show');
+    return;
+  }
+
+  const N = Math.max(600, canvas.width * 2);
+  const points = [];
+  for (let i = 0; i <= N; i++) {
+    const x = xMin + (xMax - xMin) * (i / N);
+    let y;
+    try { y = compiled.evaluate({ x }); } catch { y = NaN; }
+    points.push({ x, y: typeof y === 'number' ? y : NaN });
+  }
+
+  currentPoints = points;
+  hint.style.opacity = '0';
+  document.getElementById('currentFormulaLabel').textContent = `y = ${formula}`;
+
+  if (animFrame) cancelAnimationFrame(animFrame);
+  currentAnimProgress = 0;
+
+  const duration = 900;
+  const start = performance.now();
+
+  function animate(now) {
+    const elapsed = now - start;
+    const t = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - t, 3);
+    drawGraph(points, eased);
+    if (t < 1) {
+      animFrame = requestAnimationFrame(animate);
+    } else {
+      animFrame = null;
+      updatePointsBar(points);
+    }
+  }
+  animFrame = requestAnimationFrame(animate);
+}
+
+document.getElementById('vizBtn').addEventListener('click', visualize);
+document.getElementById('formulaInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); visualize(); }
+});
+</script>
+</body>
+</html>
